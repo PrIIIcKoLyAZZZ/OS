@@ -1,5 +1,7 @@
 #!/bin/bash
 
+script_dir="$(dirname "$(realpath "$0")")"
+
 # Проверка наличия аргумента
 if [ $# -ne 1 ]; then
     echo "Ошибка: укажите имя файла для удаления."
@@ -17,7 +19,7 @@ if [ ! -f "$file" ]; then
 fi
 
 # Создание скрытого каталога ~/trash, если его нет
-trash_dir="$HOME/.trash"
+trash_dir="$script_dir/.trash"
 [ ! -d "$trash_dir" ] && mkdir "$trash_dir"
 
 # Создание уникального имени для жесткой ссылки
@@ -38,5 +40,5 @@ else
 fi
 
 # Запись в лог
-logfile="$HOME/.trash.log"
+logfile="$script_dir/.trash.log"
 echo "$filepath -> $link_id" >> "$logfile"
