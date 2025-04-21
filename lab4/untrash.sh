@@ -1,60 +1,53 @@
 #!/bin/bash
-# Скрипт: untrash.sh
-# Описание: Восстанавливает файл, удалённый скриптом rmtrash.sh, по имени (без пути).
+# untrash.sh — восстанавливает файл по имени
 
 if [ "$#" -ne 1 ]; then
-  echo "Ошибка: Укажите имя файла для восстановления (без пути)." >&2
+  echo "Ошибка: Укажите имя файла для восстановления." >&2
   exit 1
 fi
 
 restore_name="$1"
-script_dir="$(dirname "$(realpath "$0")")"
-log_file="$script_dir/.trash.log"
-trash_dir="$script_dir/.trash"
-found=0
-tmp_log=$(mktemp) || { echo "Ошибка: Не удалось создать временный файл." >&2; exit 1; }
+log_file="$HOME/trash.log"
+trash_dir="$HOME/trash"
+tmp_log=$(mktemp) || { echo "Ошибка: не удалось создать временный файл." >&2; exit 1; }
 
 if [ ! -f "$log_file" ]; then
-  echo "Ошибка: Файл журнала '$log_file' не найден." >&2
+  echo "Ошибка: файл журнала '$log_file' не найден." >&2
   exit 1
 fi
+
+found=0
 
 while IFS= read -r line; do
-  orig_path=$(echo "$line" | awk -F' -> ' '{print $1}')
-  link_name=$(echo "$line" | awk -F' -> ' '{print $2}')
-  orig_filename=$(basename "$orig_path")
+  orig_path="${line%% -> *}"
+  link_name="${line##* -> }"
+  base_name="$(basename "$orig_path")"
 
-  if [ "$orig_filename" = "$restore_name" ]; then
+  if [ "$base_name" = "$restore_name" ]; then
     found=1
-    echo "Найден файл для восстановления: $orig_path"
-    echo -n "Восстановить этот файл? [y/n] "
-    read answer < /dev/tty
+    echo "Найдено: $orig_path (в корзине: $link_name)"
+    read -p "Восстановить этот файл? [y/n] " answer
     if [[ "$answer" =~ ^[Yy]$ ]]; then
-      dest_dir=$(dirname "$orig_path")
-      if [ ! -d "$dest_dir" ]; then
-        echo "Директория '$dest_dir' не существует. Файл будет восстановлен в домашний каталог."
-        dest_dir="$HOME"
-      fi
+      dest_dir="$(dirname "$orig_path")"
+      [ -d "$dest_dir" ] || dest_dir="$HOME"
+      dest_path="$dest_dir/$base_name"
 
-      if mv "$trash_dir/$link_name" "$dest_dir/$restore_name"; then
-        echo "Файл успешно восстановлен в: $dest_dir/$restore_name"
-        continue  # не добавлять эту строку обратно в лог
-      else
-        echo "Ошибка при восстановлении файла." >&2
-        echo "$line" >> "$tmp_log"
-      fi
-    else
-      echo "$line" >> "$tmp_log"  # оставляем строку, если пользователь отказался
+      while [ -e "$dest_path" ]; do
+        echo "Файл '$dest_path' уже существует."
+        read -p "Введите новое имя для восстановления: " new_name
+        dest_path="$dest_dir/$new_name"
+      done
+
+      ln "$trash_dir/$link_name" "$dest_path" && rm "$trash_dir/$link_name"
+      echo "Восстановлено как: $dest_path"
+      continue  # не записываем в новый лог
     fi
-  else
-    echo "$line" >> "$tmp_log"
   fi
+  echo "$line" >> "$tmp_log"
 done < "$log_file"
 
-if [ "$found" -eq 0 ]; then
-  echo "Файл с именем '$restore_name' не найден в журнале." >&2
-  rm "$tmp_log"
-  exit 1
-fi
-
 mv "$tmp_log" "$log_file"
+
+if [ $found -eq 0 ]; then
+  echo "Файл '$restore_name' не найден в корзине."
+fi
