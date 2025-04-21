@@ -6,7 +6,8 @@
 set -euo pipefail
 
 home_dir="$HOME"
-source_dir="$home_dir/source"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source_dir="$script_dir"
 report_file="$home_dir/backup-report"
 current_date=$(date "+%Y-%m-%d")
 current_sec=$(date -d "$current_date" +%s)
