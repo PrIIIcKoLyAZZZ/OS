@@ -8,8 +8,9 @@ if [ "$#" -ne 1 ]; then
 fi
 
 restore_name="$1"
-log_file="$HOME/trash.log"
-trash_dir="$HOME/trash"
+script_dir="$(dirname "$(realpath "$0")")"
+log_file="$script_dir/.trash.log"
+trash_dir="$script_dir/.trash"
 found=0
 tmp_log=$(mktemp) || { echo "Ошибка: Не удалось создать временный файл." >&2; exit 1; }
 
@@ -26,7 +27,8 @@ while IFS= read -r line; do
   if [ "$orig_filename" = "$restore_name" ]; then
     found=1
     echo "Найден файл для восстановления: $orig_path"
-    read -p "Восстановить этот файл? [y/n] " answer
+    echo -n "Восстановить этот файл? [y/n] "
+    read answer < /dev/tty
     if [[ "$answer" =~ ^[Yy]$ ]]; then
       dest_dir=$(dirname "$orig_path")
       if [ ! -d "$dest_dir" ]; then
@@ -56,4 +58,3 @@ if [ "$found" -eq 0 ]; then
 fi
 
 mv "$tmp_log" "$log_file"
-
