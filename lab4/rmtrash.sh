@@ -1,44 +1,31 @@
 #!/bin/bash
+# rmtrash.sh — удаляет файл, создавая жёсткую ссылку в $HOME/trash
 
-script_dir="$(dirname "$(realpath "$0")")"
-
-# Проверка наличия аргумента
-if [ $# -ne 1 ]; then
-    echo "Ошибка: укажите имя файла для удаления."
-    exit 1
+if [ "$#" -ne 1 ]; then
+  echo "Ошибка: Укажите имя файла для удаления." >&2
+  exit 1
 fi
 
-file="$1"
-filepath="$(realpath "$file")"
-filename="$(basename "$file")"
+target_file="$1"
+trash_dir="$HOME/trash"
+log_file="$HOME/trash.log"
 
-# Проверка, что файл существует и это обычный файл
-if [ ! -f "$file" ]; then
-    echo "Ошибка: файл '$file' не существует или не является обычным файлом."
-    exit 1
+if [ ! -f "$target_file" ]; then
+  echo "Ошибка: файл '$target_file' не существует или не является обычным файлом." >&2
+  exit 1
 fi
 
-# Создание скрытого каталога ~/trash, если его нет
-trash_dir="$script_dir/.trash"
-[ ! -d "$trash_dir" ] && mkdir "$trash_dir"
+mkdir -p "$trash_dir" || { echo "Ошибка: не удалось создать каталог trash." >&2; exit 1; }
 
-# Создание уникального имени для жесткой ссылки
-link_id=1
-while [ -e "$trash_dir/$link_id" ]; do
-    link_id=$((link_id + 1))
+# Найдём уникальное имя
+i=1
+while [ -e "$trash_dir/$i" ]; do
+  i=$((i + 1))
 done
 
-# Создание жесткой ссылки и удаление оригинального файла
-ln "$file" "$trash_dir/$link_id" && rm "$file"
+ln "$target_file" "$trash_dir/$i" || { echo "Ошибка: не удалось создать жёсткую ссылку." >&2; exit 1; }
+rm -- "$target_file" || { echo "Ошибка: не удалось удалить оригинальный файл." >&2; exit 1; }
 
-# Проверка успешности
-if [ $? -eq 0 ]; then
-    echo "Файл '$filename' перемещён в корзину как ссылка № $link_id."
-else
-    echo "Ошибка при создании ссылки или удалении файла."
-    exit 1
-fi
-
-# Запись в лог
-logfile="$script_dir/.trash.log"
-echo "$filepath -> $link_id" >> "$logfile"
+# Добавим в лог
+printf "%s -> %s\n" "$(realpath "$target_file")" "$i" >> "$log_file"
+echo "Файл перемещён в корзину как: $i"
