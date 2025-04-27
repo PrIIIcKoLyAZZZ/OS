@@ -1,30 +1,53 @@
 #!/bin/bash
-# upback.sh — восстанавливает содержимое из последнего каталога Backup-*
+# upback.sh — восстанавливает каталоги и файлы на их исходные места из последнего бэкапа
 
 set -euo pipefail
 
-home="$HOME"
-latest_backup=""
-latest_date=""
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-for dir in "$home"/Backup-*; do
-  [ -d "$dir" ] || continue
-  date_part="${dir##*/Backup-}"
-  if ! date -d "$date_part" &>/dev/null; then continue; fi
-  if [ -z "$latest_date" ] || [[ "$date_part" > "$latest_date" ]]; then
-    latest_date="$date_part"
-    latest_backup="$dir"
+# Находим самый свежий бэкап
+latest=""
+latest_dt=""
+for d in "$SCRIPT_DIR"/Backup-????-??-??; do
+  [ -d "$d" ] || continue
+  dt="${d##*/Backup-}"
+  if date -d "$dt" >/dev/null 2>&1; then
+    if [[ -z "$latest_dt" || "$dt" > "$latest_dt" ]]; then
+      latest_dt="$dt"
+      latest="$d"
+    fi
   fi
 done
 
-if [ -z "$latest_backup" ]; then
-  echo "Ошибка: не найдено резервных копий." >&2
+if [ -z "$latest" ]; then
+  echo "Ошибка: не найден ни один бэкап" >&2
   exit 1
 fi
 
-restore_dir="$home/restore"
-mkdir -p "$restore_dir"
+echo "Восстановление из: $(basename "$latest")"
 
-cp -a "$latest_backup"/. "$restore_dir"/
+shopt -s dotglob nullglob
+for entry in "$latest"/* "$latest"/.*; do
+  [ "$entry" = "$latest/." ] && continue
+  [ "$entry" = "$latest/.." ] && continue
+  name="$(basename "$entry")"
+  # пропускаем файлы-версии
+  if [[ "$name" =~ \.[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+    continue
+  fi
 
-echo "Резервная копия из $latest_backup восстановлена в $restore_dir"
+  src="$entry"
+  dst="$SCRIPT_DIR/$name"
+
+  if [ -d "$src" ]; then
+    mkdir -p -- "$dst"
+    cp -pr -- "$src"/. "$dst"/
+    echo "Каталог восстановлен: $name"
+  else
+    mkdir -p -- "$(dirname "$dst")"
+    cp -p -- "$src" "$dst"
+    echo "Файл восстановлен: $name"
+  fi
+done
+
+echo "Восстановление завершено."
