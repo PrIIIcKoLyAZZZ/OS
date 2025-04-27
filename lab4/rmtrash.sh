@@ -1,31 +1,47 @@
 #!/bin/bash
-# rmtrash.sh — удаляет файл, создавая жёсткую ссылку в $HOME/trash
+# Скрипт: rmtrash.sh — «безопасное» удаление файлов и папок в .trash рядом со скриптом
 
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TRASH_DIR="$SCRIPT_DIR/.trash"
+LOG_FILE="$SCRIPT_DIR/trash.log"
+
+# Проверка аргумента
 if [ "$#" -ne 1 ]; then
-  echo "Ошибка: Укажите имя файла для удаления." >&2
+  echo "Ошибка: укажите путь к файлу или каталогу для удаления." >&2
   exit 1
 fi
 
-target_file="$1"
-trash_dir="$HOME/trash"
-log_file="$HOME/trash.log"
+TARGET="$1"
+ABS_PATH="$(realpath "$TARGET")"
+NAME="$(basename "$TARGET")"
 
-if [ ! -f "$target_file" ]; then
-  echo "Ошибка: файл '$target_file' не существует или не является обычным файлом." >&2
+if [ ! -e "$TARGET" ]; then
+  echo "Ошибка: '$TARGET' не найден." >&2
   exit 1
 fi
 
-mkdir -p "$trash_dir" || { echo "Ошибка: не удалось создать каталог trash." >&2; exit 1; }
+# Создать корзину
+mkdir -p -- "$TRASH_DIR"
 
-# Найдём уникальное имя
+# Найти уникальный идентификатор
 i=1
-while [ -e "$trash_dir/$i" ]; do
-  i=$((i + 1))
+while [ -e "$TRASH_DIR/$i" ]; do
+  i=$((i+1))
 done
 
-ln "$target_file" "$trash_dir/$i" || { echo "Ошибка: не удалось создать жёсткую ссылку." >&2; exit 1; }
-rm -- "$target_file" || { echo "Ошибка: не удалось удалить оригинальный файл." >&2; exit 1; }
+# Если это каталог — переместить
+if [ -d "$TARGET" ]; then
+  mv -- "$TARGET" "$TRASH_DIR/$i"
+  ACTION="mv"
+else
+  # файл — создать жёсткую ссылку и удалить
+  ln -- "$TARGET" "$TRASH_DIR/$i"
+  rm -- "$TARGET"
+  ACTION="ln"
+fi
 
-# Добавим в лог
-printf "%s -> %s\n" "$(realpath "$target_file")" "$i" >> "$log_file"
-echo "Файл перемещён в корзину как: $i"
+# Запись в лог
+printf "%s -> %s (%s)\n" "$ABS_PATH" "$i" "$ACTION" >> "$LOG_FILE"
+echo "Перемещено в корзину [$i]: $TARGET"
